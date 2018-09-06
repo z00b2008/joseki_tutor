@@ -33,6 +33,7 @@ class Stone:
         self.x = x
         self.y = y
         self.color = color
+        self.idx = 0
 
 class GUI(Frame):
   
@@ -85,7 +86,7 @@ class GUI(Frame):
         
         # self.update()
         self.current_sgf_node = None
-        self.stones = []
+        self.stones = {}
         self.possibilities = {}
         self.advance_to_first_move(self.sgf_tree)
          
@@ -97,6 +98,7 @@ class GUI(Frame):
         self.draw_possibilities()
 
         self.end_of_variation = False
+        self.current_idx = 0
 
     def update_mistake_zone(self):
         self.mistake_zone['text'] = 'Total mistakes : ' + str(self.sgf_parser.total_mistake_count)
@@ -108,7 +110,6 @@ class GUI(Frame):
     def advance_to_first_move(self, node, stop_on = {'B', 'W'}):
         for p in node.properties:
             if p.tag in stop_on:
-                # self.stones.append(self.property_to_stone(p))
                 self.current_sgf_node = node.parent
                 return
         for c in node.children:
@@ -160,7 +161,21 @@ class GUI(Frame):
 
         # draw stones
         stone = None
-        for stone in self.stones:
+        dead_stones = []
+        for (x,y), stone in self.stones.items():
+            this_color = self.stones[(x,y)].color
+            if (x-1,y) in self.stones.keys() \
+                and (x+1,y) in self.stones.keys() \
+                and (x,y-1) in self.stones.keys() \
+                and (x,y+1) in self.stones.keys() \
+                and self.stones[x-1,y].color != this_color \
+                and self.stones[x+1,y].color != this_color \
+                and self.stones[x,y-1].color != this_color \
+                and self.stones[x,y+1].color != this_color :
+                dead_stones.append((x,y))
+        for pos in dead_stones:
+            del self.stones[pos]
+        for _, stone in self.stones.items():
             self.draw_stone(stone)
         self.current_color = stone_color.black if (stone is None or stone.color is stone_color.white) else stone_color.white
 
@@ -196,9 +211,12 @@ class GUI(Frame):
         if stone.color is stone_color.black:
             self.goban_canvas.create_oval(x - stone_size/2, y - stone_size/2, x + stone_size/2, y + stone_size/2, 
                                         outline=black_stone_color, fill=black_stone_color)
+            
+            self.goban_canvas.create_text(x, y, text=str(stone.idx), fill=white_stone_color)
         elif stone.color is stone_color.white:
             self.goban_canvas.create_oval(x - stone_size/2, y - stone_size/2, x + stone_size/2, y + stone_size/2, 
                                         outline=white_stone_color, fill=white_stone_color)
+            self.goban_canvas.create_text(x, y, text=str(stone.idx), fill=black_stone_color)
         else:
             raise ValueError("Invalid stone color")
 
@@ -233,8 +251,12 @@ class GUI(Frame):
             self.update_mistake_zone()
             self.draw_possibilities()
             return
+
         new_stone_human = Stone(x, y, self.current_color)
-        self.stones.append(new_stone_human)
+        assert (x,y) not in self.stones
+        self.stones[(x,y)] = new_stone_human
+        self.current_idx += 1
+        self.stones[(x,y)].idx = self.current_idx
         self.current_sgf_node = self.possibilities[(x,y)]
         self.current_sgf_node.visit_count += 1
         
@@ -248,12 +270,17 @@ class GUI(Frame):
 
         time.sleep(white_move_delay)
 
-        next_move = self.get_next_white_move()
-        assert next_move is not None
-        new_stone_computer = Stone(next_move[0], next_move[1], self.current_color)
-        self.stones.append(new_stone_computer)
+        (x,y) = self.get_next_white_move()
+        new_stone_computer = Stone(x, y, self.current_color)
+        if((x,y)) in self.stones:
+            print ('key', (x,y))
+            print (self.stones.keys())
+        assert (x,y) not in self.stones
+        self.stones[(x,y)] = new_stone_computer
+        self.current_idx += 1
+        self.stones[(x,y)].idx = self.current_idx
 
-        self.current_sgf_node = self.possibilities[next_move]
+        self.current_sgf_node = self.possibilities[(x,y)]
         self.current_sgf_node.visit_count += 1
         
         self.compute_possible_next_moves()
@@ -278,18 +305,6 @@ class GUI(Frame):
         # we select in priority nodes that have never been visited
         if len(never_visited) > 0:
             return random.choice(never_visited)
-
-        print('visits, ratio: ', max_visits, max_ratio)
-
-        # # some of the nodes have been visited but no mistake has been made
-        # if max_ratio == 0.0:
-        #     pick = random.uniform(0, max_visits)
-        #     current = 0
-        #     for pos, node in self.possibilities.items():
-        #         current += node.visit_count
-        #         if current >= pick:
-        #             return pos
-        #     assert(True)
             
         # some of the nodes have been visited
         pick = random.uniform(0, max_ratio)
