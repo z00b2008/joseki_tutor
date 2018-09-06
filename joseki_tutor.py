@@ -48,7 +48,7 @@ class GUI(Frame):
         self.goban_canvas.grid(row=0, column=0, columnspan=2, rowspan=1)
 
         self.comment_zone = Text(self.master)
-        self.comment_zone.grid(row=0, column=2, columnspan=2, rowspan=1)
+        self.comment_zone.grid(row=0, column=2, columnspan=3, rowspan=1)
         self.comment_zone.configure(state='disabled')
 
         self.mistake_zone = Label(self.master)
@@ -62,6 +62,9 @@ class GUI(Frame):
         
         restart_button = Button(self.master, text="Restart", command=self.init)
         restart_button.grid(row=1, column=3)
+
+        quit_button = Button(self.master, text="Quit", command=self.close)
+        quit_button.grid(row=1, column=4)
 
         self.sgf_parser = None
         if os.path.exists(pickle_filename):
@@ -233,6 +236,7 @@ class GUI(Frame):
         new_stone_human = Stone(x, y, self.current_color)
         self.stones.append(new_stone_human)
         self.current_sgf_node = self.possibilities[(x,y)]
+        self.current_sgf_node.visit_count += 1
         
         self.compute_possible_next_moves()
         self.redraw_goban()
@@ -244,13 +248,13 @@ class GUI(Frame):
 
         time.sleep(white_move_delay)
 
-        # pick a move at random for the computer
-        # TODO: design smarter rule to learn
         next_move = self.get_next_white_move()
+        assert next_move is not None
         new_stone_computer = Stone(next_move[0], next_move[1], self.current_color)
         self.stones.append(new_stone_computer)
 
         self.current_sgf_node = self.possibilities[next_move]
+        self.current_sgf_node.visit_count += 1
         
         self.compute_possible_next_moves()
         self.redraw_goban()
@@ -262,19 +266,38 @@ class GUI(Frame):
             return
 
     def get_next_white_move(self):
-        max = 0
-        for _, node in self.possibilities.items():
+        max_ratio = 0
+        never_visited = []
+        for pos, node in self.possibilities.items():
             if node.visit_count == 0:
+                never_visited.append(pos)
                 continue
-            max += node.mistake_count / node.visit_count
+            # we add the 1/N term to give a chance of visit to every node
+            max_ratio += (1.0 / len(self.possibilities.keys()) + node.mistake_count) / node.visit_count
 
-        pick = random.uniform(0, max)
+        # we select in priority nodes that have never been visited
+        if len(never_visited) > 0:
+            return random.choice(never_visited)
+
+        print('visits, ratio: ', max_visits, max_ratio)
+
+        # # some of the nodes have been visited but no mistake has been made
+        # if max_ratio == 0.0:
+        #     pick = random.uniform(0, max_visits)
+        #     current = 0
+        #     for pos, node in self.possibilities.items():
+        #         current += node.visit_count
+        #         if current >= pick:
+        #             return pos
+        #     assert(True)
+            
+        # some of the nodes have been visited
+        pick = random.uniform(0, max_ratio)
         current = 0
         for pos, node in self.possibilities.items():
-            if node.visit_count > 0:
-                current += node.mistake_count / node.visit_count
+            current += (1.0 / len(self.possibilities.keys()) + node.mistake_count) / node.visit_count
 
-            print (current, pick)
+            print ('current, pick :', current, pick)
             if current >= pick:
                 return pos
 
