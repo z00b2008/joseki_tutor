@@ -69,9 +69,9 @@ class SGFNode:
             elif c == ')':
                 break
             elif c.isalpha():
-                self.properties.append(SGPProperty(sgf_code, iterator))
+                self.properties.append(SGFProperty(sgf_code, iterator))
             elif c == '[':
-                self.properties.append(SGPProperty(sgf_code, iterator , self.properties[-1].tag))
+                self.properties.append(SGFProperty(sgf_code, iterator , self.properties[-1].tag))
 
             iterator.increment()
         
@@ -81,7 +81,7 @@ class SGFNode:
         for c in self.children:
             c.print(tab + '\t')
 
-class SGPProperty:
+class SGFProperty:
 
     def __init__(self, sgf_code, iterator, tag_name = ''):
         self.tag = tag_name
